@@ -6,7 +6,7 @@ Security-focused utilities for Toxi.
 
 ```toml
 [dependencies]
-toxi-security = "2.3.4"
+toxi-security = "3.1.0"
 ```
 
 ## Available Utilities
