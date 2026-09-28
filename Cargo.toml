@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["Meshack Bahati Ouma <bahatikylemeshack@gmail.com>"]
 description = "Security utilities for Toxi (CSRF, XSS protection, encryption)"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/meshackbahati/toxi"
+repository = "https://github.com/toxi-rs/toxi-security"
 keywords = ["security", "csrf", "xss", "encryption", "web"]
 categories = ["web-programming", "cryptography"]
 
