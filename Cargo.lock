@@ -188,19 +188,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
-name = "toxi-security"
-version = "2.0.0"
-dependencies = [
- "aes-gcm",
- "base64",
- "hex",
- "hmac",
- "rand",
- "sha2",
- "thiserror",
-]
-
-[[package]]
 name = "polyval"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -329,6 +316,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "toxi-security"
+version = "3.1.1"
+dependencies = [
+ "aes-gcm",
+ "base64",
+ "hex",
+ "hmac",
+ "rand",
+ "sha2",
+ "thiserror",
 ]
 
 [[package]]
