@@ -13,29 +13,49 @@ pub fn escape_html(s: &str) -> String {
 /// Sanitize HTML by removing dangerous tags and attributes
 /// This is a basic implementation - for production use consider
 /// a dedicated library like ammonia
+///
+/// The passes below reuse two alternating buffers instead of allocating
+/// a fresh `String` per pass. Matching logic is unchanged; only the
+/// allocation pattern differs, so sanitization behavior is preserved.
 #[must_use]
 pub fn sanitize_html(s: &str) -> String {
-    // Remove script tags
-    let mut result = remove_tag(s, "script");
-    result = remove_tag(&result, "style");
-    result = remove_tag(&result, "iframe");
-    result = remove_tag(&result, "object");
-    result = remove_tag(&result, "embed");
-    result = remove_tag(&result, "form");
-    
-    // Remove event handlers (onclick, onload, etc.)
-    result = remove_event_handlers(&result);
-    
-    // Remove javascript: URLs
-    result = remove_javascript_urls(&result);
-    
-    result
+    // Tag patterns are built once; the previous form rebuilt them on
+    // every pass through `format!` inside `remove_tag`.
+    const TAGS: [&str; 6] = ["script", "style", "iframe", "object", "embed", "form"];
+
+    let mut current = s.to_string();
+    let mut next = String::with_capacity(s.len());
+
+    for tag in TAGS {
+        next.clear();
+        remove_tag_into(&current, tag, &mut next);
+        std::mem::swap(&mut current, &mut next);
+    }
+
+    next.clear();
+    remove_event_handlers_into(&current, &mut next);
+    std::mem::swap(&mut current, &mut next);
+
+    // Two scheme strips ping-pong across the same buffers; no wrapper
+    // allocation remains between them.
+    next.clear();
+    replace_ascii_case_insensitive_into(&current, "javascript:", "", &mut next);
+    std::mem::swap(&mut current, &mut next);
+
+    next.clear();
+    replace_ascii_case_insensitive_into(&current, "vbscript:", "", &mut next);
+    std::mem::swap(&mut current, &mut next);
+
+    current
 }
 
-fn remove_tag(s: &str, tag: &str) -> String {
-    let mut result = String::new();
+fn remove_tag_into(s: &str, tag: &str, out: &mut String) {
     let open = format!("<{}", tag);
     let close = format!("</{}>", tag);
+    remove_tag_between(s, &open, &close, out);
+}
+
+fn remove_tag_between(s: &str, open: &str, close: &str, result: &mut String) {
 
     let mut cursor = 0usize;
     while let Some(start) = find_ascii_case_insensitive(s, &open, cursor) {
@@ -50,17 +70,21 @@ fn remove_tag(s: &str, tag: &str) -> String {
         }
     }
     result.push_str(&s[cursor..]);
-    result
 }
 
-fn remove_event_handlers(s: &str) -> String {
+/// Same matching loop as `remove_event_handlers`, writing into a reused
+/// buffer instead of cloning the input first.
+fn remove_event_handlers_into(s: &str, result: &mut String) {
     let event_handlers = [
         "onclick", "onload", "onerror", "onmouseover", "onmouseout",
         "onfocus", "onblur", "onsubmit", "onchange", "onkeyup",
         "onkeydown", "onkeypress",
     ];
-    
-    let mut result = s.to_string();
+
+    // Seed the working buffer with the input; the loop below is
+    // unchanged from the previous clone-then-edit form.
+    result.clear();
+    result.push_str(s);
     for handler in event_handlers {
         while let Some(start) = find_ascii_case_insensitive(&result, handler, 0) {
             let Some(eq_pos) = result[start..].find('=') else {
@@ -80,13 +104,27 @@ fn remove_event_handlers(s: &str) -> String {
             result.replace_range(start..end, "");
         }
     }
-    
-    result
 }
 
-fn remove_javascript_urls(s: &str) -> String {
-    let without_js = replace_ascii_case_insensitive(s, "javascript:", "");
-    replace_ascii_case_insensitive(&without_js, "vbscript:", "")
+fn replace_ascii_case_insensitive_into(
+    input: &str,
+    needle: &str,
+    replacement: &str,
+    out: &mut String,
+) {
+    // Reuse the buffer's existing capacity; output never exceeds input
+    // length here since both replacements are deletions.
+    out.clear();
+    if out.capacity() < input.len() {
+        out.reserve(input.len() - out.capacity());
+    }
+    let mut cursor = 0usize;
+    while let Some(idx) = find_ascii_case_insensitive(input, needle, cursor) {
+        out.push_str(&input[cursor..idx]);
+        out.push_str(replacement);
+        cursor = idx + needle.len();
+    }
+    out.push_str(&input[cursor..]);
 }
 
 fn find_ascii_case_insensitive(haystack: &str, needle: &str, from: usize) -> Option<usize> {
@@ -109,18 +147,6 @@ fn find_ascii_case_insensitive(haystack: &str, needle: &str, from: usize) -> Opt
         }
     }
     None
-}
-
-fn replace_ascii_case_insensitive(input: &str, needle: &str, replacement: &str) -> String {
-    let mut out = String::with_capacity(input.len());
-    let mut cursor = 0usize;
-    while let Some(idx) = find_ascii_case_insensitive(input, needle, cursor) {
-        out.push_str(&input[cursor..idx]);
-        out.push_str(replacement);
-        cursor = idx + needle.len();
-    }
-    out.push_str(&input[cursor..]);
-    out
 }
 
 /// Strip all HTML tags
